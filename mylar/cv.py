@@ -24,6 +24,7 @@ import lib.feedparser
 import mylar
 import platform
 from bs4 import BeautifulSoup as Soup
+from xml.parsers.expat import ExpatError
 import httplib
 import requests
 
@@ -96,10 +97,19 @@ def pulldetails(comicid, type, issueid=None, offset=1, arclist=None, comicidlist
         return
 
     #logger.fdebug('cv status code : ' + str(r.status_code))
-    dom = parseString(r.content)
-
-    return dom
-
+    try:
+        dom = parseString(r.content)
+    except ExpatError:
+        if u'<title>Abnormal Traffic Detected' in r.content:
+            logger.error('ComicVine has banned this server\'s IP address because it exceeded the API rate limit.')
+        else:
+            logger.warn('[WARNING] ComicVine is not responding correctly at the moment. This is usually due to some problems on their end. If you re-try things again in a few moments, things might work')
+        return
+    except Exception as e:
+        logger.warn('[ERROR] Error returned from CV: %s' % e)
+        return
+    else:
+        return dom
 
 def getComic(comicid, type, issueid=None, arc=None, arcid=None, arclist=None, comicidlist=None):
     if type == 'issue':
@@ -320,7 +330,7 @@ def GetComicInfo(comicid, dom, safechk=None):
     comic['Type'] = 'None'
     if comic_deck != 'None':
         if any(['print' in comic_deck.lower(), 'digital' in comic_deck.lower(), 'paperback' in comic_deck.lower(), 'one shot' in re.sub('-', '', comic_deck.lower()).strip(), 'hardcover' in comic_deck.lower()]):
-            if 'print' in comic_deck.lower():
+            if all(['print' in comic_deck.lower(), 'reprint' not in comic_deck.lower()]):
                 comic['Type'] = 'Print'
             elif 'digital' in comic_deck.lower():
                 comic['Type'] = 'Digital'
@@ -330,9 +340,11 @@ def GetComicInfo(comicid, dom, safechk=None):
                 comic['Type'] = 'HC'
             elif 'oneshot' in re.sub('-', '', comic_deck.lower()).strip():
                 comic['Type'] = 'One-Shot'
+            else:
+                comic['Type'] = 'Print'
 
     if comic_desc != 'None' and comic['Type'] == 'None':
-        if 'print' in comic_desc[:60].lower() and 'print edition can be found' not in comic_desc.lower():
+        if 'print' in comic_desc[:60].lower() and all(['print edition can be found' not in comic_desc.lower(), 'reprints' not in comic_desc.lower()]):
             comic['Type'] = 'Print'
         elif 'digital' in comic_desc[:60].lower() and 'digital edition can be found' not in comic_desc.lower():
             comic['Type'] = 'Digital'
@@ -411,16 +423,16 @@ def GetComicInfo(comicid, dom, safechk=None):
                                         issuerun = issuerun[:srchline+len(x)]
                                         break
                                 except Exception as e:
-                                    logger.warn('[ERROR] %s' % e)
+                                    #logger.warn('[ERROR] %s' % e)
                                     continue
                 else:
                     iss_start = fc_name.find('#')
                     issuerun = fc_name[iss_start:].strip()
                     fc_name = fc_name[:iss_start].strip()
 
-                if issuerun.endswith('.') or issuerun.endswith(','):
+                if issuerun.strip().endswith('.') or issuerun.strip().endswith(','):
                     #logger.fdebug('Changed issuerun from %s to %s' % (issuerun, issuerun[:-1]))
-                    issuerun = issuerun[:-1]
+                    issuerun = issuerun.strip()[:-1]
                 if issuerun.endswith(' and '):
                     issuerun = issuerun[:-4].strip()
                 elif issuerun.endswith(' and'):
@@ -464,7 +476,10 @@ def GetComicInfo(comicid, dom, safechk=None):
                 #arbitrarily grab the next 10 chars (6 for volume + 1 for space + 3 for the actual vol #)
                 #increased to 10 to allow for text numbering (+5 max)
                 #sometimes it's volume 5 and ocassionally it's fifth volume.
-                if i == 0:
+                if comicDes[v_find+7:comicDes.find(' ', v_find+7)].isdigit():
+                    comic['ComicVersion'] = re.sub("[^0-9]", "", comicDes[v_find+7:comicDes.find(' ', v_find+7)]).strip()
+                    break
+                elif i == 0:
                     vfind = comicDes[v_find:v_find +15]   #if it's volume 5 format
                     basenums = {'zero': '0', 'one': '1', 'two': '2', 'three': '3', 'four': '4', 'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9', 'ten': '10', 'i': '1', 'ii': '2', 'iii': '3', 'iv': '4', 'v': '5'}
                     logger.fdebug('volume X format - ' + str(i) + ': ' + vfind)
