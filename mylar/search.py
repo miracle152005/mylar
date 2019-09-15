@@ -2289,7 +2289,7 @@ def searcher(nzbprov, nzbname, comicinfo, link, IssueID, ComicID, tmpprov, direc
                 alt_nzbname = re.sub('.nzb', '', filen).strip()
                 alt_nzbname = re.sub('[\s+]', ' ', alt_nzbname)
                 alt_nzbname = re.sub('[\s\_]', '.', alt_nzbname)
-                logger.info('filen: %s -- nzbname: %s are not identical. Storing extra value as : %s' % (filen, nzbname, alt_nzbname))
+                logger.info('filen: %s -- nzbname: %s are not identical. Storing extra value as : %s' % (filen.decode('utf8', 'ignore'), nzbname.decode('utf8', 'ignore'), alt_nzbname.decode('utf8', 'ignore')))
 
             #make sure the cache directory exists - if not, create it (used for storing nzbs).
             if os.path.exists(mylar.CONFIG.CACHE_DIR):
